@@ -1,0 +1,12 @@
+version: "3"
+services:
+  node1:
+    image: transfercarimage
+  node2:
+    image: transfercarimage
+  node3:
+    image: transfercarimage
+  node4:
+    image: transfercarimage
+  node5:
+    image: transfercarimage
