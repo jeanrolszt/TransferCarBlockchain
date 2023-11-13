@@ -104,13 +104,12 @@ class Blockchain:
     #     return nodes
 
 
+time.sleep(random.randint(0,10))
 print("Creating node: " + socket.gethostname() + " | IP: " + socket.gethostbyname(socket.gethostname()))
 
 # starting find node threads
-thread1 = threading.Thread(target=recive_node)
-thread2 = threading.Thread(target=send_node)
-thread1.start()
-thread2.start()
+threading.Thread(target=recive_node).start()
+threading.Thread(target=send_node).start()
 
 
 # starting blockchain
@@ -122,6 +121,7 @@ block = Block(blockchain.get_last_block().index + 1 , str(datetime.datetime.now(
 block.mining_block()
 blockchain.add_block(block)
 print(blockchain.json())
+print(nodes)
 
 run_threads = False
 
