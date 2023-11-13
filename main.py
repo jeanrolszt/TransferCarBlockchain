@@ -69,7 +69,7 @@ class Blockchain:
         self.create_genesis_block()
 
     def create_genesis_block(self):
-        genesis_block = Block(0, "01/01/1970", "Genesis Block", "0")
+        genesis_block = Block(0, str(datetime.datetime(1970,1,1)), "Genesis Block", "0")
         genesis_block.mining_block()
         self.chain.append(genesis_block)
 
