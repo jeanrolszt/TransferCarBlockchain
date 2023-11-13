@@ -21,9 +21,9 @@ def recive_node():
     print("lintening on port: " + str(PORT) + " for nodes")
     while run_threads:
         data, addr = reciver.recvfrom(32)
-        if addr not in nodes and addr[0] != socket.gethostbyname(socket.gethostname()) and data.decode('utf-8') == "!NODE":
+        if addr[0] not in nodes and addr[0] != socket.gethostbyname(socket.gethostname()) and data.decode('utf-8') == "!NODE":
             print("Recived: " + data.decode('utf-8') + " from: " + str(addr))
-            nodes.append(addr)
+            nodes.append(addr[0])
 
 
 def send_node():
@@ -61,7 +61,7 @@ class Block:
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
     
     def mining_block(self):
-        difficulty = 2
+        difficulty = 4
         self.hash = self.calc_hash()
         while self.hash[:difficulty] != "0"*difficulty:
             self.nonce += 1
@@ -75,7 +75,8 @@ class Blockchain:
 
     def create_genesis_block(self):
         genesis_block = Block(0, str(datetime.datetime(1970,1,1)), Transaction("","",""), "0")
-        self.add_block(genesis_block)
+        genesis_block.hash = '0000029b68cd2a04e86102146801b28c0657762955c30356f36219174e0d022f'
+        self.chain.append(genesis_block)
 
     def get_last_block(self):
         return self.chain[-1]
@@ -112,6 +113,11 @@ class Blockchain:
                 cars.remove(block.data.car)
         return cars    
 
+    def tranfes_car(self, reciver, car):
+        transaction = Transaction(socket.gethostbyname(socket.gethostname()), reciver, car)
+        block = Block(self.get_last_block().index + 1 , str(datetime.datetime.now()), transaction, self.get_last_block().hash)
+        self.add_block(block)
+        return block.index
     # def add_transaction(self, transaction):
     #     self.transaction.append(transaction)
     #     return self.get_last_block().index + 1
@@ -135,11 +141,19 @@ blockchain = Blockchain()
 for _ in range(0, random.randint(0,5)):
     blockchain.buy_new_car()
 
+
+
+time.sleep(10)
 print("blockchain is valid? " + str(blockchain.is_chain_valid()))
 print(blockchain.json())
 print(nodes)
 print(blockchain.get_cars_from(socket.gethostbyname(socket.gethostname())))
 
+
+blockchain.tranfes_car(nodes[0], blockchain.get_cars_from(socket.gethostbyname(socket.gethostname()))[0])
+print(blockchain.json())
+print(blockchain.get_cars_from(socket.gethostbyname(socket.gethostname())))
+print(nodes)
 run_threads = False
 
 exit()
