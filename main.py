@@ -20,10 +20,9 @@ def recive_node():
     print("lintening on port: " + str(PORT) + " for nodes")
     while run_threads:
         data, addr = reciver.recvfrom(32)
-        print("Recived: " + data.decode('utf-8') + " from: " + str(addr))
         if addr not in nodes and addr[0] != socket.gethostbyname(socket.gethostname()) and data.decode('utf-8') == "!NODE":
+            print("Recived: " + data.decode('utf-8') + " from: " + str(addr))
             nodes.append(addr)
-        print(nodes)
 
 
 def send_node():
@@ -31,7 +30,7 @@ def send_node():
     sender.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     print("sending broadcast on port: " + str(PORT))
     while run_threads:
-        time.sleep(10)
+        time.sleep(3)
         msg = "!NODE"
         sender.sendto(msg.encode('utf-8'), ("255.255.255.255", PORT))
 
