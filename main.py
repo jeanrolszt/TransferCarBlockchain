@@ -6,6 +6,7 @@ import random
 import time
 from hashlib import sha256
 import json
+import string
 
 
 HOST = socket.gethostbyname(socket.gethostname())
@@ -40,6 +41,9 @@ class Transaction:
         self.sender = sender
         self.reciver = reciver
         self.car = car
+    
+    def json(self):
+        return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 class Block:
     def __init__(self,index, date ,data, prev_hash):
@@ -94,6 +98,13 @@ class Blockchain:
     def json(self):
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
     
+    def buy_new_car(self):
+        transaction = Transaction("store", socket.gethostbyname(socket.gethostname()), ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(6)))
+        block = Block(self.get_last_block().index + 1 , str(datetime.datetime.now()), transaction, self.get_last_block().hash)
+        block.mining_block()
+        self.add_block(block)
+        return block.index
+    
 
     # def add_transaction(self, transaction):
     #     self.transaction.append(transaction)
@@ -114,12 +125,11 @@ threading.Thread(target=send_node).start()
 
 # starting blockchain
 blockchain = Blockchain()
-block = Block(blockchain.get_last_block().index + 1 , str(datetime.datetime.now()), random.randint(0,1000), blockchain.get_last_block().hash)
-block.mining_block()
-blockchain.add_block(block)
-block = Block(blockchain.get_last_block().index + 1 , str(datetime.datetime.now()), random.randint(0,1000), blockchain.get_last_block().hash)
-block.mining_block()
-blockchain.add_block(block)
+
+for _ in range(0, 5):
+    blockchain.buy_new_car()
+
+print("blockchain is valid? " + str(blockchain.is_chain_valid()))
 print(blockchain.json())
 print(nodes)
 
