@@ -55,17 +55,18 @@ class Block:
         self.hash = self.calc_hash()
     
     def calc_hash(self):
-        return sha256((str(self.index) + str(self.date) + str(self.data) + str(self.prev_hash) + str(self.nonce)).encode("utf-8")).hexdigest()
+        return sha256(f"{self.index}{self.date}{self.data.json()}{self.prev_hash}{self.nonce}".encode("utf-8")).hexdigest()
     
     def json(self):
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
     
     def mining_block(self):
-        difficulty = 5
+        difficulty = 2
+        self.hash = self.calc_hash()
         while self.hash[:difficulty] != "0"*difficulty:
             self.nonce += 1
             self.hash = self.calc_hash()
-        print("Block mined: " + self.hash)
+        print(f"Block {self.index} mined: " + self.hash)
 
 class Blockchain:
     def __init__(self):
@@ -73,16 +74,14 @@ class Blockchain:
         self.create_genesis_block()
 
     def create_genesis_block(self):
-        genesis_block = Block(0, str(datetime.datetime(1970,1,1)), "Genesis Block", "0")
-        genesis_block.mining_block()
-        self.chain.append(genesis_block)
+        genesis_block = Block(0, str(datetime.datetime(1970,1,1)), Transaction("","",""), "0")
+        self.add_block(genesis_block)
 
     def get_last_block(self):
         return self.chain[-1]
 
     def add_block(self, new_block):
-        new_block.prev_hash = self.get_last_block().hash
-        new_block.hash = new_block.calc_hash()
+        new_block.mining_block()
         self.chain.append(new_block)
 
     def is_chain_valid(self):
@@ -101,10 +100,17 @@ class Blockchain:
     def buy_new_car(self):
         transaction = Transaction("store", socket.gethostbyname(socket.gethostname()), ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(6)))
         block = Block(self.get_last_block().index + 1 , str(datetime.datetime.now()), transaction, self.get_last_block().hash)
-        block.mining_block()
         self.add_block(block)
         return block.index
     
+    def get_cars_from(self, ip):
+        cars = []
+        for block in self.chain:
+            if block.data.reciver == ip:
+                cars.append(block.data.car)
+            elif block.data.sender == ip:
+                cars.remove(block.data.car)
+        return cars    
 
     # def add_transaction(self, transaction):
     #     self.transaction.append(transaction)
@@ -126,12 +132,13 @@ threading.Thread(target=send_node).start()
 # starting blockchain
 blockchain = Blockchain()
 
-for _ in range(0, 5):
+for _ in range(0, random.randint(0,5)):
     blockchain.buy_new_car()
 
 print("blockchain is valid? " + str(blockchain.is_chain_valid()))
 print(blockchain.json())
 print(nodes)
+print(blockchain.get_cars_from(socket.gethostbyname(socket.gethostname())))
 
 run_threads = False
 
