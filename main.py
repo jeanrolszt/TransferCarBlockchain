@@ -20,7 +20,7 @@ def recive_node():
     reciver.bind(("0.0.0.0", PORT))
     print("lintening on port: " + str(PORT) + " for nodes")
     while run_threads:
-        data, addr = reciver.recvfrom(32)
+        data, addr = reciver.recvfrom(5)
         if addr[0] not in nodes and addr[0] != socket.gethostbyname(socket.gethostname()) and data.decode('utf-8') == "!NODE":
             print("Recived: " + data.decode('utf-8') + " from: " + str(addr))
             nodes.append(addr[0])
@@ -60,8 +60,7 @@ class Block:
     def json(self):
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
     
-    def mining_block(self):
-        difficulty = 4
+    def mining_block(self,difficulty=2):
         self.hash = self.calc_hash()
         while self.hash[:difficulty] != "0"*difficulty:
             self.nonce += 1
@@ -101,7 +100,8 @@ class Blockchain:
     def buy_new_car(self):
         transaction = Transaction("store", socket.gethostbyname(socket.gethostname()), ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(6)))
         block = Block(self.get_last_block().index + 1 , str(datetime.datetime.now()), transaction, self.get_last_block().hash)
-        self.add_block(block)
+        block.mining_block(5)
+        self.chain.append(block)
         return block.index
     
     def get_cars_from(self, ip):
@@ -118,13 +118,7 @@ class Blockchain:
         block = Block(self.get_last_block().index + 1 , str(datetime.datetime.now()), transaction, self.get_last_block().hash)
         self.add_block(block)
         return block.index
-    # def add_transaction(self, transaction):
-    #     self.transaction.append(transaction)
-    #     return self.get_last_block().index + 1
 
-    # def add_node(self, node):
-    #     nodes.append(node)
-    #     return nodes
 
 
 time.sleep(random.randint(0,10))
@@ -138,7 +132,7 @@ threading.Thread(target=send_node).start()
 # starting blockchain
 blockchain = Blockchain()
 
-for _ in range(0, random.randint(0,5)):
+for _ in range(0, random.randint(1,5)):
     blockchain.buy_new_car()
 
 
