@@ -13,6 +13,8 @@ HOST = socket.gethostbyname(socket.gethostname())
 BROADCAST_PORT = 911
 DATA_PORT = 912
 nodes = []
+recived_blockchain = []
+valides_recived_blockchain = []
 
 run_threads = True
 
@@ -37,14 +39,31 @@ def send_node():
         sender.sendto(msg.encode('utf-8'), ("255.255.255.255", BROADCAST_PORT))
 
 
+def validation_raw_blockchain(blockchain_validation):
+    print(blockchain_validation)
+    for block in blockchain_validation["chain"]:
+        if(block["index"] == 0):
+            continue
+        new_block = Block(block["index"],block["date"],Transaction(block["data"]["sender"],block["data"]["reciver"],block["data"]["car"]),block["prev_hash"],block["nonce"])
+        if(new_block.hash != block["hash"]):
+            print("erro",new_block.hash, block["hash"])
+    return True
+
+
 def request_blockchain():
     for node in nodes:
-        print("requesting blockchain from: " + node)
         threading.Thread(target=request_blockchain_thread(node)).start()
+    for blockchain in recived_blockchain:
+        print(validation_raw_blockchain(blockchain))
 
 
 def request_blockchain_thread(node):
     try:
+        print("requesting blockchain from: " + node)
+        recived = {
+            "ip":node,
+            "chain":[]
+        }
         # connect to node
         request = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         request.connect((node, DATA_PORT))
@@ -52,29 +71,35 @@ def request_blockchain_thread(node):
         # send request
         msg = "!BLOCKCHAIN"
         request.send(msg.encode('utf-8'))
-
         # recive blockchain
-        data = request.recv(1024)
-        print(data.decode('utf-8'))
-        request.close()
-    except:
-        print("can't connect to node: " + node)
+        while True:
+            data = request.recv(1024)
+            if(data.decode('utf-8') == "BLOCKCHAIN!"):
+                break
+            else:
+                recived["chain"].append(json.loads(data.decode('utf-8')))
+        recived_blockchain.append(recived)
+    except Exception as error:
+        print("An exception occurred:", type(error).__name__, error)
 
 
 def respond_blockchain():
     reciver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     reciver.bind(("0.0.0.0", DATA_PORT))
 
-    reciver.listen()
+    reciver.listen(10)
     print("lintening on port: " + str(DATA_PORT) + " for blockchain request")
 
-    while True:
+    while run_threads:
         conn, addr = reciver.accept()
         print("recived request for blockchain from: " + str(addr))
         threading.Thread(target=respond_blockchain_thread(conn)).start()
 
 def respond_blockchain_thread(conn):
-    conn.send(blockchain.json().encode('utf-8'))
+    for block in blockchain.chain:
+        conn.send(block.json().encode('utf-8'))
+        time.sleep(0.01)
+    conn.send("BLOCKCHAIN!".encode('utf-8'))
     conn.close()
 
 class Transaction:
@@ -87,12 +112,12 @@ class Transaction:
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 class Block:
-    def __init__(self,index, date ,data, prev_hash):
+    def __init__(self,index, date ,data, prev_hash,nonce=0):
         self.index = index
         self.date = date
         self.data = data
         self.prev_hash = prev_hash
-        self.nonce = 0
+        self.nonce = nonce
         self.hash = self.calc_hash()
     
     def calc_hash(self):
@@ -172,6 +197,7 @@ threading.Thread(target=send_node).start()
 
 # starting blockchain
 blockchain = Blockchain()
+threading.Thread(target=respond_blockchain).start()
 
 for _ in range(0, random.randint(1,5)):
     blockchain.buy_new_car()
@@ -194,7 +220,6 @@ for _ in range(0, random.randint(1,5)):
 
 
 time.sleep(5)
-threading.Thread(target=respond_blockchain).start()
 time.sleep(10)
 time.sleep(random.randint(0,15))
 request_blockchain()
