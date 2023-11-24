@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import datetime
 import socket
+import sys
 import threading
 import random
 import time
@@ -12,6 +13,9 @@ import string
 HOST = socket.gethostbyname(socket.gethostname())
 BROADCAST_PORT = 911
 DATA_PORT = 912
+COMMANDSIZE = 50
+BLOCKSIZE = 100
+
 nodes = []
 recived_blockchain = []
 valides_recived_blockchain = []
@@ -38,6 +42,32 @@ def send_node():
         msg = "!NODE"
         sender.sendto(msg.encode('utf-8'), ("255.255.255.255", BROADCAST_PORT))
 
+def recive_data():
+    reciver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    reciver.bind((socket.gethostbyname(socket.gethostname()), DATA_PORT))
+    reciver.listen()
+    while run_threads:
+        client, adress = reciver.accept()
+        threading.Thread(target=handler_data(client, adress)).start()
+
+
+def handler_data(client, adress ):
+    size = client.recv(COMMANDSIZE).decode("utf-8")
+    command = client.recv(int(size)).decode("utf-8")
+    print(f'from {adress[0]} -> {command}')
+    match command:
+        case "SENDINGBLOCKCHAIN":
+            recived = {
+            "ip":adress[0],
+            "chain":[]
+            }
+            while True:
+                size = client.recv(BLOCKSIZE).decode("utf-8")
+                if size == '':
+                    break
+                data = client.recv(int(size)).decode("utf-8")
+                recived["chain"].append(json.loads(data))
+            recived_blockchain.append(recived)
 
 def validation_raw_blockchain(blockchain_validation):
     print(blockchain_validation)
@@ -73,7 +103,7 @@ def request_blockchain_thread(node):
         request.send(msg.encode('utf-8'))
         # recive blockchain
         while True:
-            data = request.recv(1024)
+            data = request.recv(512)
             if(data.decode('utf-8') == "BLOCKCHAIN!"):
                 break
             else:
@@ -102,6 +132,18 @@ def respond_blockchain_thread(conn):
     conn.send("BLOCKCHAIN!".encode('utf-8'))
     conn.close()
 
+def send_blockchain(node):
+    conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    conn.connect((node, DATA_PORT))
+    command = "SENDINGBLOCKCHAIN"
+    command = f'{len(command):<{COMMANDSIZE}}' + command
+    conn.send(command.encode('utf-8'))
+    for block in blockchain.chain:
+        msg = block.json()
+        msg = f'{len(msg):<{BLOCKSIZE}}' + msg
+        conn.send((msg).encode("utf-8"))
+    conn.close()
+
 class Transaction:
     def __init__(self, sender, reciver, car):
         self.sender = sender
@@ -112,13 +154,13 @@ class Transaction:
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 class Block:
-    def __init__(self,index, date ,data, prev_hash,nonce=0):
+    def __init__(self,index, date ,data, prev_hash,nonce=0,hash = ""):
         self.index = index
         self.date = date
         self.data = data
         self.prev_hash = prev_hash
         self.nonce = nonce
-        self.hash = self.calc_hash()
+        self.hash = hash
     
     def calc_hash(self):
         return sha256(f"{self.index}{self.date}{self.data.json()}{self.prev_hash}{self.nonce}".encode("utf-8")).hexdigest()
@@ -174,8 +216,10 @@ class Blockchain:
         cars = []
         for block in self.chain:
             if block.data.reciver == ip:
+                print("add")
                 cars.append(block.data.car)
             elif block.data.sender == ip:
+                print("remove")
                 cars.remove(block.data.car)
         return cars    
 
@@ -184,10 +228,16 @@ class Blockchain:
         block = Block(self.get_last_block().index + 1 , str(datetime.datetime.now()), transaction, self.get_last_block().hash)
         self.add_block(block)
         return block.index
+    
+    def share_blockchain(self):
+        for node in nodes:
+            threading.Thread(target=send_blockchain(node)).start()
+
+    
 
 
 
-time.sleep(random.randint(0,10))
+
 print("Creating node: " + socket.gethostname() + " | IP: " + socket.gethostbyname(socket.gethostname()))
 
 # starting find node threads
@@ -197,12 +247,34 @@ threading.Thread(target=send_node).start()
 
 # starting blockchain
 blockchain = Blockchain()
-threading.Thread(target=respond_blockchain).start()
-
-for _ in range(0, random.randint(1,5)):
-    blockchain.buy_new_car()
+# threading.Thread(target=respond_blockchain).start()
+threading.Thread(target=recive_data).start()
 
 
+
+def transfer_car():
+    reciver = "1"
+    while not reciver in nodes:
+        print("availables nodes:")
+        for (i, item) in enumerate(nodes, start=0):
+            print(i, item)
+        index = input("reciver index ->")
+        reciver = nodes[int(index)]
+        if not reciver in nodes:
+            print("incorrect")
+    
+    cars = blockchain.get_cars_from(socket.gethostbyname(socket.gethostname()))
+    car = ""
+    while not car in cars:
+        print("availables cars:")
+        for (i, item) in enumerate(cars, start=0):
+                print(i, item)
+        index = input("car index ->")
+        car = cars[int(index)]
+        if not car in cars:
+            print("incorrect")
+
+    blockchain.tranfes_car(reciver,car)
 
 
 # time.sleep(10)
@@ -219,12 +291,34 @@ for _ in range(0, random.randint(1,5)):
 # run_threads = False
 
 
-time.sleep(5)
-time.sleep(10)
-time.sleep(random.randint(0,15))
-request_blockchain()
 
 
 # can't stop execute
 while True:
-    time.sleep(10)
+    print("TranferCarBlockchain")
+    print("1 - buy new car")
+    print("2 - request_blockchain")
+    print("3 - see nodes")
+    print("4 - recived_blockchain")
+    print("5 - transfer car")
+    print("6 - see my cars")
+    print("7 - my blockchain")
+    print("8 - share my blockchain")
+    option = input()
+    match option:
+        case "1":
+            blockchain.buy_new_car()
+        case "2":
+            request_blockchain()
+        case "3":
+            print(nodes)
+        case "4":
+            print(recived_blockchain)
+        case "5":
+            transfer_car()
+        case "6":
+            print(blockchain.get_cars_from(socket.gethostbyname(socket.gethostname())))
+        case "7":
+            print(blockchain.json())
+        case "8":
+            blockchain.share_blockchain()
