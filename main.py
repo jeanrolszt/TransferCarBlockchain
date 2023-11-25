@@ -15,7 +15,7 @@ HOST = socket.gethostbyname(socket.gethostname())
 BROADCAST_PORT = 911
 DATA_PORT = 912
 COMMANDSIZE = 50
-BLOCKSIZE = 100
+DATA_SIZE = 50
 
 nodes = []
 recived_blockchain = []
@@ -42,6 +42,17 @@ def send_node():
         msg = "!NODE"
         sender.sendto(msg.encode('utf-8'), ("255.255.255.255", BROADCAST_PORT))
 
+def tcp_protocol_recive(client):
+    size = client.recv(DATA_SIZE).decode("utf-8")
+    data = client.recv(int(size))
+    return pickle.loads(data)
+
+def tcp_protocol_send(conn,data):
+    msg = pickle.dumps(data)
+    msg = bytes(f'{len(msg):<{DATA_SIZE}}', "utf-8") + msg
+    conn.send(msg)
+    return
+
 def recive_data():
     reciver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     reciver.bind((socket.gethostbyname(socket.gethostname()), DATA_PORT))
@@ -51,8 +62,7 @@ def recive_data():
         threading.Thread(target=handler_data(client, adress)).start()
 
 def handler_data(client, adress ):
-    size = client.recv(COMMANDSIZE).decode("utf-8")
-    command = client.recv(int(size)).decode("utf-8")
+    command = tcp_protocol_recive(client)
     print(f'from {adress[0]} -> {command}')
     match command:
         case "SENDINGBLOCKCHAIN":
@@ -65,12 +75,7 @@ def recive_block_from(client, adress):
         "ip":adress[0],
         "blockchain":[]
     }
-    while True:
-        size = client.recv(BLOCKSIZE).decode("utf-8")
-        if size == '':
-            break
-        data = client.recv(int(size))
-        recived["chain"].append(pickle.loads(data))
+    recived["blockchain"] = tcp_protocol_recive(client)
     for past in recived_blockchain:
         if past["ip"] == adress[0]:
             recived_blockchain.remove(past)
@@ -80,29 +85,52 @@ def recive_block_from(client, adress):
 
     client.close()
 
-def validation_raw_blockchain(blockchain_validation):
-    print(blockchain_validation)
-    for block in blockchain_validation["chain"]:
-        if(block["index"] == 0):
-            continue
-        new_block = Block(block["index"],block["date"],Transaction(block["data"]["sender"],block["data"]["reciver"],block["data"]["car"]),block["prev_hash"],block["nonce"])
-        if(new_block.hash != block["hash"]):
-            print("erro",new_block.hash, block["hash"])
-    return True
-
 
 
 def send_blockchain(node):
     conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     conn.connect((node, DATA_PORT))
-    command = "SENDINGBLOCKCHAIN"
-    command = f'{len(command):<{COMMANDSIZE}}' + command
-    conn.send(command.encode('utf-8'))
-    for block in blockchain.chain:
-        msg = pickle.dumps(block)
-        msg = bytes(f'{len(msg):<{BLOCKSIZE}}', "utf-8") + msg
-        conn.send(msg)
+    tcp_protocol_send(conn,"SENDINGBLOCKCHAIN")
+    tcp_protocol_send(conn,blockchain)
     conn.close()
+
+def transfer_car():
+    reciver = "1"
+    while not reciver in nodes:
+        print("availables nodes:")
+        for (i, item) in enumerate(nodes, start=0):
+            print(i, item)
+        index = input("reciver index ->")
+        reciver = nodes[int(index)]
+        if not reciver in nodes:
+            print("incorrect")
+    
+    cars = blockchain.get_cars_from(socket.gethostbyname(socket.gethostname()))
+    car = ""
+    while not car in cars:
+        print("availables cars:")
+        for (i, item) in enumerate(cars, start=0):
+                print(i, item)
+        index = input("car index ->")
+        car = cars[int(index)]
+        if not car in cars:
+            print("incorrect")
+
+    blockchain.tranfes_car(reciver,car)
+
+def edit_block():
+    print("availables blocks:")
+    for (i, item) in enumerate(blockchain.chain, start=0):
+        print(i, item.json())
+    index = int(input("block index ->"))
+    blockchain.chain[index].data.car = input("new car ->")
+    blockchain.chain[index].data.reciver = input("new reciver ->")
+    blockchain.chain[index].data.sender = input("new sender ->")
+
+def print_recived_blockchain():
+    for item in recived_blockchain:
+        print(item["ip"])
+        print(item["blockchain"].json())
 
 class Transaction:
     def __init__(self, sender, reciver, car):
@@ -192,10 +220,6 @@ class Blockchain:
             print("sending to -> ",node)
             threading.Thread(target=send_blockchain(node)).start()
 
-    
-
-
-
 
 print("Creating node: " + socket.gethostname() + " | IP: " + socket.gethostbyname(socket.gethostname()))
 
@@ -203,75 +227,23 @@ print("Creating node: " + socket.gethostname() + " | IP: " + socket.gethostbynam
 threading.Thread(target=recive_node).start()
 threading.Thread(target=send_node).start()
 
-
 # starting blockchain
 blockchain = Blockchain()
-# threading.Thread(target=respond_blockchain).start()
 threading.Thread(target=recive_data).start()
-
-
-
-def transfer_car():
-    reciver = "1"
-    while not reciver in nodes:
-        print("availables nodes:")
-        for (i, item) in enumerate(nodes, start=0):
-            print(i, item)
-        index = input("reciver index ->")
-        reciver = nodes[int(index)]
-        if not reciver in nodes:
-            print("incorrect")
-    
-    cars = blockchain.get_cars_from(socket.gethostbyname(socket.gethostname()))
-    car = ""
-    while not car in cars:
-        print("availables cars:")
-        for (i, item) in enumerate(cars, start=0):
-                print(i, item)
-        index = input("car index ->")
-        car = cars[int(index)]
-        if not car in cars:
-            print("incorrect")
-
-    blockchain.tranfes_car(reciver,car)
-
-def edit_block():
-    print("availables blocks:")
-    for (i, item) in enumerate(blockchain.chain, start=0):
-        print(i, item.json())
-    index = int(input("block index ->"))
-    blockchain.chain[index].data.car = input("new car ->")
-    blockchain.chain[index].data.reciver = input("new reciver ->")
-    blockchain.chain[index].data.sender = input("new sender ->")
-
-# time.sleep(10)
-# print("blockchain is valid? " + str(blockchain.is_chain_valid()))
-# print(blockchain.json())
-# print(nodes)
-# print(blockchain.get_cars_from(socket.gethostbyname(socket.gethostname())))
-
-
-# blockchain.tranfes_car(nodes[0], blockchain.get_cars_from(socket.gethostbyname(socket.gethostname()))[0])
-# print(blockchain.json())
-# print(blockchain.get_cars_from(socket.gethostbyname(socket.gethostname())))
-# print(nodes)
-# run_threads = False
-
-
-
 
 # can't stop execute
 while True:
     options = [
         "buy new car",
         "transfer car", 
-        "see nodes",
+        "edit block",
+        "check local blockchain",
         "see my cars", 
         "see my blockchain", 
         "share my blockchain",
-        "edit block",
-        "check local blockchain",
-        "recived_blockchain"
+        "recived_blockchain",
+        "see nodes",
+        "exit"
     ]
     print("TranferCarBlockchain")
     for (i, item) in enumerate(options, start=1):
@@ -283,7 +255,7 @@ while True:
         case "see nodes":
             print(nodes)
         case "recived_blockchain":
-            print(recived_blockchain)
+            print_recived_blockchain()
         case "transfer car":
             transfer_car()
         case "see my cars":
