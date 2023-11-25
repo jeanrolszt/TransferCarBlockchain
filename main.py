@@ -18,7 +18,7 @@ COMMANDSIZE = 50
 DATA_SIZE = 50
 
 nodes = []
-recived_blockchain = []
+recived_blockchain = {}
 valides_recived_blockchain = []
 
 run_threads = True
@@ -53,38 +53,43 @@ def tcp_protocol_send(conn,data):
     conn.send(msg)
     return
 
-def recive_data():
+def recive_data_tcp():
     reciver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     reciver.bind((socket.gethostbyname(socket.gethostname()), DATA_PORT))
     reciver.listen()
     while run_threads:
         client, adress = reciver.accept()
-        threading.Thread(target=handler_data(client, adress)).start()
+        threading.Thread(target=handler_data_tcp(client, adress)).start()
 
-def handler_data(client, adress ):
+def handler_data_tcp(client, adress ):
     command = tcp_protocol_recive(client)
     print(f'from {adress[0]} -> {command}')
     match command:
         case "SENDINGBLOCKCHAIN":
-            recive_block_from(client, adress)
+            recive_blockchain_from(client, adress)
+        case "ISLIAR":
+            recived_is_liar(client, adress)
         case default:
             client.close()
     
-def recive_block_from(client, adress):
-    recived = {
-        "ip":adress[0],
-        "blockchain":[]
-    }
-    recived["blockchain"] = tcp_protocol_recive(client)
-    for past in recived_blockchain:
-        if past["ip"] == adress[0]:
-            recived_blockchain.remove(past)
-            recived_blockchain.append(recived)
-            return
-    recived_blockchain.append(recived)
-
+def recive_blockchain_from(client, adress):
+    recive = tcp_protocol_recive(client)
+    if recive.is_chain_valid():
+        recived_blockchain[adress[0]] = recive
+    else:
+        threading.Thread(target=send_is_liar(adress[0])).start()
     client.close()
 
+def recived_is_liar(client, adress):
+    data = tcp_protocol_recive(client)
+    print(adress[0], "tell me that ",data," is a liar")
+
+def send_is_liar(ip):
+    for node in nodes:
+        conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        conn.connect((node, DATA_PORT))
+        tcp_protocol_send(conn,"ISLIAR")
+        tcp_protocol_send(conn,ip)
 
 
 def send_blockchain(node):
@@ -129,8 +134,8 @@ def edit_block():
 
 def print_recived_blockchain():
     for item in recived_blockchain:
-        print(item["ip"])
-        print(item["blockchain"].json())
+        print("BLOCKCHAIN RECIVED FROM -> ",item)
+        print(recived_blockchain[item].json())
 
 class Transaction:
     def __init__(self, sender, reciver, car):
@@ -229,7 +234,7 @@ threading.Thread(target=send_node).start()
 
 # starting blockchain
 blockchain = Blockchain()
-threading.Thread(target=recive_data).start()
+threading.Thread(target=recive_data_tcp).start()
 
 # can't stop execute
 while True:
@@ -243,7 +248,7 @@ while True:
         "share my blockchain",
         "recived_blockchain",
         "see nodes",
-        "exit"
+        "is_liar"
     ]
     print("TranferCarBlockchain")
     for (i, item) in enumerate(options, start=1):
@@ -268,3 +273,5 @@ while True:
             edit_block()
         case "check local blockchain":
             print(blockchain.is_chain_valid())
+        case "is_liar":
+            threading.Thread(target=send_is_liar("500.500.500.500")).start()
