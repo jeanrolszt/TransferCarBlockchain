@@ -83,6 +83,9 @@ def recive_blockchain_from(client, adress):
 def recived_is_liar(client, adress):
     data = tcp_protocol_recive(client)
     print(adress[0], "tell me that ",data," is a liar")
+    if socket.gethostbyname(socket.gethostname()) == data:
+        print("I'm a liar")
+        return
 
 def send_is_liar(ip):
     for node in nodes:
@@ -250,9 +253,10 @@ while True:
         "see nodes",
         "is_liar"
     ]
-    print("TranferCarBlockchain")
+    to_print = "\n" + "TranferCarBlockchain" + "\n"
     for (i, item) in enumerate(options, start=1):
-        print(i," - ", item)
+        to_print = to_print + str(i) + " - " + str(item) + "\n"
+    print(to_print)
     option = int(input())-1
     match options[option]:
         case "buy new car":
