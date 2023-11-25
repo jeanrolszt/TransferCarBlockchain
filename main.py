@@ -8,6 +8,7 @@ import time
 from hashlib import sha256
 import json
 import string
+import pickle
 
 
 HOST = socket.gethostbyname(socket.gethostname())
@@ -32,7 +33,6 @@ def recive_node():
             print("Recived: " + data.decode('utf-8') + " from: " + str(addr))
             nodes.append(addr[0])
 
-
 def send_node():
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sender.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -50,24 +50,35 @@ def recive_data():
         client, adress = reciver.accept()
         threading.Thread(target=handler_data(client, adress)).start()
 
-
 def handler_data(client, adress ):
     size = client.recv(COMMANDSIZE).decode("utf-8")
     command = client.recv(int(size)).decode("utf-8")
     print(f'from {adress[0]} -> {command}')
     match command:
         case "SENDINGBLOCKCHAIN":
-            recived = {
-            "ip":adress[0],
-            "chain":[]
-            }
-            while True:
-                size = client.recv(BLOCKSIZE).decode("utf-8")
-                if size == '':
-                    break
-                data = client.recv(int(size)).decode("utf-8")
-                recived["chain"].append(json.loads(data))
+            recive_block_from(client, adress)
+        case default:
+            client.close()
+    
+def recive_block_from(client, adress):
+    recived = {
+        "ip":adress[0],
+        "chain":[]
+    }
+    while True:
+        size = client.recv(BLOCKSIZE).decode("utf-8")
+        if size == '':
+            break
+        data = client.recv(int(size)).decode("utf-8")
+        recived["chain"].append(json.loads(data))
+    for past in recived_blockchain:
+        if past["ip"] == adress[0]:
+            recived_blockchain.remove(past)
             recived_blockchain.append(recived)
+            return
+    recived_blockchain.append(recived)
+
+    client.close()
 
 def validation_raw_blockchain(blockchain_validation):
     print(blockchain_validation)
@@ -80,57 +91,6 @@ def validation_raw_blockchain(blockchain_validation):
     return True
 
 
-def request_blockchain():
-    for node in nodes:
-        threading.Thread(target=request_blockchain_thread(node)).start()
-    for blockchain in recived_blockchain:
-        print(validation_raw_blockchain(blockchain))
-
-
-def request_blockchain_thread(node):
-    try:
-        print("requesting blockchain from: " + node)
-        recived = {
-            "ip":node,
-            "chain":[]
-        }
-        # connect to node
-        request = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        request.connect((node, DATA_PORT))
-
-        # send request
-        msg = "!BLOCKCHAIN"
-        request.send(msg.encode('utf-8'))
-        # recive blockchain
-        while True:
-            data = request.recv(512)
-            if(data.decode('utf-8') == "BLOCKCHAIN!"):
-                break
-            else:
-                recived["chain"].append(json.loads(data.decode('utf-8')))
-        recived_blockchain.append(recived)
-    except Exception as error:
-        print("An exception occurred:", type(error).__name__, error)
-
-
-def respond_blockchain():
-    reciver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    reciver.bind(("0.0.0.0", DATA_PORT))
-
-    reciver.listen(10)
-    print("lintening on port: " + str(DATA_PORT) + " for blockchain request")
-
-    while run_threads:
-        conn, addr = reciver.accept()
-        print("recived request for blockchain from: " + str(addr))
-        threading.Thread(target=respond_blockchain_thread(conn)).start()
-
-def respond_blockchain_thread(conn):
-    for block in blockchain.chain:
-        conn.send(block.json().encode('utf-8'))
-        time.sleep(0.01)
-    conn.send("BLOCKCHAIN!".encode('utf-8'))
-    conn.close()
 
 def send_blockchain(node):
     conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -216,10 +176,8 @@ class Blockchain:
         cars = []
         for block in self.chain:
             if block.data.reciver == ip:
-                print("add")
                 cars.append(block.data.car)
             elif block.data.sender == ip:
-                print("remove")
                 cars.remove(block.data.car)
         return cars    
 
@@ -231,6 +189,7 @@ class Blockchain:
     
     def share_blockchain(self):
         for node in nodes:
+            print("sending to -> ",node)
             threading.Thread(target=send_blockchain(node)).start()
 
     
@@ -276,6 +235,14 @@ def transfer_car():
 
     blockchain.tranfes_car(reciver,car)
 
+def edit_block():
+    print("availables blocks:")
+    for (i, item) in enumerate(blockchain.chain, start=0):
+        print(i, item.json())
+    index = int(input("block index ->"))
+    blockchain.chain[index].data.car = input("new car ->")
+    blockchain.chain[index].data.reciver = input("new reciver ->")
+    blockchain.chain[index].data.sender = input("new sender ->")
 
 # time.sleep(10)
 # print("blockchain is valid? " + str(blockchain.is_chain_valid()))
@@ -295,30 +262,37 @@ def transfer_car():
 
 # can't stop execute
 while True:
+    options = [
+        "buy new car",
+        "transfer car", 
+        "see nodes",
+        "see my cars", 
+        "see my blockchain", 
+        "share my blockchain",
+        "edit block",
+        "check local blockchain",
+        "recived_blockchain"
+    ]
     print("TranferCarBlockchain")
-    print("1 - buy new car")
-    print("2 - request_blockchain")
-    print("3 - see nodes")
-    print("4 - recived_blockchain")
-    print("5 - transfer car")
-    print("6 - see my cars")
-    print("7 - my blockchain")
-    print("8 - share my blockchain")
-    option = input()
-    match option:
-        case "1":
+    for (i, item) in enumerate(options, start=1):
+        print(i," - ", item)
+    option = int(input())-1
+    match options[option]:
+        case "buy new car":
             blockchain.buy_new_car()
-        case "2":
-            request_blockchain()
-        case "3":
+        case "see nodes":
             print(nodes)
-        case "4":
+        case "recived_blockchain":
             print(recived_blockchain)
-        case "5":
+        case "transfer car":
             transfer_car()
-        case "6":
+        case "see my cars":
             print(blockchain.get_cars_from(socket.gethostbyname(socket.gethostname())))
-        case "7":
+        case "see my blockchain":
             print(blockchain.json())
-        case "8":
+        case "share my blockchain":
             blockchain.share_blockchain()
+        case "edit block":
+            edit_block()
+        case "check local blockchain":
+            print(blockchain.is_chain_valid())
