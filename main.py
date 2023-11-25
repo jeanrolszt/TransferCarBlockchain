@@ -17,6 +17,7 @@ DATA_PORT = 912
 COMMANDSIZE = 50
 DATA_SIZE = 50
 
+can_print = True
 nodes = []
 recived_blockchain = {}
 liars = {}
@@ -26,17 +27,17 @@ run_threads = True
 def recive_node():
     reciver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     reciver.bind(("0.0.0.0", BROADCAST_PORT))
-    print("lintening on port: " + str(BROADCAST_PORT) + " for nodes")
+    if can_print: print("lintening on port: " + str(BROADCAST_PORT) + " for nodes")
     while run_threads:
         data, addr = reciver.recvfrom(5)
         if addr[0] not in nodes and addr[0] != socket.gethostbyname(socket.gethostname()) and data.decode('utf-8') == "!NODE":
-            print("Recived: " + data.decode('utf-8') + " from: " + str(addr))
+            if can_print: print("Recived: " + data.decode('utf-8') + " from: " + str(addr))
             nodes.append(addr[0])
 
 def send_node():
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sender.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    print("sending broadcast on port: " + str(BROADCAST_PORT))
+    if can_print: print("sending broadcast on port: " + str(BROADCAST_PORT))
     while run_threads:
         time.sleep(3)
         msg = "!NODE"
@@ -63,7 +64,7 @@ def recive_data_tcp():
 
 def handler_data_tcp(client, adress ):
     command = tcp_protocol_recive(client)
-    print(f'from {adress[0]} -> {command}')
+    if can_print: print(f'from {adress[0]} -> {command}')
     match command:
         case "SENDINGBLOCKCHAIN":
             recive_blockchain_from(client, adress)
@@ -82,9 +83,9 @@ def recive_blockchain_from(client, adress):
 
 def recived_is_liar(client, adress):
     data = tcp_protocol_recive(client)
-    print(adress[0], "tell me that ",data," is a liar")
+    if can_print: print(adress[0], "tell me that ",data," is a liar")
     if socket.gethostbyname(socket.gethostname()) == data:
-        print("I'm a liar")
+        if can_print: print("I'm a liar")
         return
     else:
         if data in liars:
@@ -109,9 +110,11 @@ def send_blockchain(node):
         tcp_protocol_send(conn,my_blockchain)
         conn.close()
     except:
-        print("falhou")
+        if can_print: print("falhou")
 
 def transfer_car():
+    global can_print
+    can_print = False
     reciver = "1"
     while not reciver in nodes:
         print("availables nodes:")
@@ -132,13 +135,14 @@ def transfer_car():
         car = cars[int(index)]
         if not car in cars:
             print("incorrect")
-
+    can_print = True
     my_blockchain.tranfes_car(reciver,car)
 
+
 def edit_block():
-    print("availables blocks:")
+    if can_print: print("availables blocks:")
     for (i, item) in enumerate(my_blockchain.chain, start=0):
-        print(i, item.json())
+        if can_print: print(i, item.json())
     index = int(input("block index ->"))
     my_blockchain.chain[index].data.car = input("new car ->")
     my_blockchain.chain[index].data.reciver = input("new reciver ->")
@@ -146,8 +150,8 @@ def edit_block():
 
 def print_recived_blockchain():
     for item in recived_blockchain:
-        print("BLOCKCHAIN RECIVED FROM -> ",item)
-        print(recived_blockchain[item].json())
+        if can_print: print("BLOCKCHAIN RECIVED FROM -> ",item)
+        if can_print: print(recived_blockchain[item].json())
 
 class Transaction:
     def __init__(self, sender, reciver, car):
@@ -178,7 +182,7 @@ class Block:
         while self.hash[:difficulty] != "0"*difficulty:
             self.nonce += 1
             self.hash = self.calc_hash()
-        print(f"Block {self.index} mined: " + self.hash)
+        if can_print: print(f"Block {self.index} mined: " + self.hash)
 
 class Blockchain:
     def __init__(self):
@@ -213,7 +217,7 @@ class Blockchain:
     def buy_new_car(self):
         transaction = Transaction("store", socket.gethostbyname(socket.gethostname()), ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(6)))
         block = Block(self.get_last_block().index + 1 , str(datetime.datetime.now()), transaction, self.get_last_block().hash)
-        block.mining_block(2)
+        block.mining_block(5)
         self.chain.append(block)
         return block.index
     
@@ -234,7 +238,7 @@ class Blockchain:
     
     def share_blockchain(self):
         for node in nodes:
-            print("sending to -> ",node)
+            if can_print: print("sending to -> ",node)
             threading.Thread(target=send_blockchain(node)).start()
 
 
@@ -249,9 +253,9 @@ def sync_local_block_chain():
                     valide_blockchain = recived_blockchain[ip]
         my_blockchain = valide_blockchain
         my_blockchain.share_blockchain()
-        print("I'm sync :)")
+        if can_print: print("I'm sync :)")
 
-print("Creating node: " + socket.gethostname() + " | IP: " + socket.gethostbyname(socket.gethostname()))
+if can_print: print("Creating node: " + socket.gethostname() + " | IP: " + socket.gethostbyname(socket.gethostname()))
 
 # starting find node threads
 threading.Thread(target=recive_node).start()
@@ -275,7 +279,8 @@ while True:
         "share my blockchain",
         "recived_blockchain",
         "see nodes",
-        "list liars"
+        "list liars",
+        "exit"
     ]
     to_print = "\n" + "TranferCarBlockchain" + "\n"
     for (i, item) in enumerate(options, start=1):
@@ -304,7 +309,10 @@ while True:
                 print(my_blockchain.is_chain_valid())
             case "list liars":
                 print(liars)
+            case "exit":
+                sys.exit()
             case default:
                 continue
-    except:
-        print("menu error")
+    except Exception as e:
+        print("menu error",e)
+        can_print=True
