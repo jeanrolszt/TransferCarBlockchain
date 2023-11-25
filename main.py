@@ -17,7 +17,8 @@ DATA_PORT = 912
 COMMANDSIZE = 50
 DATA_SIZE = 50
 
-can_print = True
+notcomplete = False
+can_print = False
 nodes = []
 recived_blockchain = {}
 liars = {}
@@ -82,10 +83,12 @@ def recive_blockchain_from(client, adress):
     client.close()
 
 def recived_is_liar(client, adress):
+    global my_blockchain
     data = tcp_protocol_recive(client)
     if can_print: print(adress[0], "tell me that ",data," is a liar")
     if socket.gethostbyname(socket.gethostname()) == data:
         if can_print: print("I'm a liar")
+        my_blockchain = Blockchain()
         return
     else:
         if data in liars:
@@ -114,6 +117,7 @@ def send_blockchain(node):
 
 def transfer_car():
     global can_print
+    past_can_print = can_print
     can_print = False
     reciver = "1"
     while not reciver in nodes:
@@ -135,7 +139,7 @@ def transfer_car():
         car = cars[int(index)]
         if not car in cars:
             print("incorrect")
-    can_print = True
+    can_print = past_can_print
     my_blockchain.tranfes_car(reciver,car)
 
 
@@ -177,12 +181,15 @@ class Block:
     def json(self):
         return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
     
-    def mining_block(self,difficulty=2):
+    def mining_block(self,difficulty=4):
+        global notcomplete
+        notcomplete = True
         self.hash = self.calc_hash()
         while self.hash[:difficulty] != "0"*difficulty:
             self.nonce += 1
             self.hash = self.calc_hash()
-        if can_print: print(f"Block {self.index} mined: " + self.hash)
+        print(f"Block {self.index} mined: " + self.hash)
+        notcomplete = False
 
 class Blockchain:
     def __init__(self):
@@ -217,7 +224,7 @@ class Blockchain:
     def buy_new_car(self):
         transaction = Transaction("store", socket.gethostbyname(socket.gethostname()), ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(6)))
         block = Block(self.get_last_block().index + 1 , str(datetime.datetime.now()), transaction, self.get_last_block().hash)
-        block.mining_block(5)
+        block.mining_block(4)
         self.chain.append(block)
         return block.index
     
@@ -255,6 +262,35 @@ def sync_local_block_chain():
         my_blockchain.share_blockchain()
         if can_print: print("I'm sync :)")
 
+def loading_animation():
+    while True:
+        animation = [
+        "mining block [        ]",
+        "mining block [=       ]",
+        "mining block [===     ]",
+        "mining block [====    ]",
+        "mining block [=====   ]",
+        "mining block [======  ]",
+        "mining block [======= ]",
+        "mining block [========]",
+        "mining block [ =======]",
+        "mining block [  ======]",
+        "mining block [   =====]",
+        "mining block [    ====]",
+        "mining block [     ===]",
+        "mining block [      ==]",
+        "mining block [       =]",
+        "mining block [        ]",
+        "mining block [        ]"
+        ]
+
+        i = 0
+        global notcomplete
+        while notcomplete:
+            print(animation[i % len(animation)], end='\r')
+            time.sleep(.1)
+            i += 1
+
 if can_print: print("Creating node: " + socket.gethostname() + " | IP: " + socket.gethostbyname(socket.gethostname()))
 
 # starting find node threads
@@ -265,6 +301,7 @@ threading.Thread(target=send_node).start()
 my_blockchain = Blockchain()
 threading.Thread(target=recive_data_tcp).start()
 threading.Thread(target=sync_local_block_chain).start()
+threading.Thread(target=loading_animation).start()
 
 
 # can't stop execute
@@ -280,9 +317,11 @@ while True:
         "recived_blockchain",
         "see nodes",
         "list liars",
+        "turn on prints",
         "exit"
     ]
     to_print = "\n" + "TranferCarBlockchain" + "\n"
+    to_print = to_print + "IP:" + socket.gethostbyname(socket.gethostname()) + "\n"
     for (i, item) in enumerate(options, start=1):
         to_print = to_print + str(i) + " - " + str(item) + "\n"
     print(to_print)
@@ -311,6 +350,8 @@ while True:
                 print(liars)
             case "exit":
                 sys.exit()
+            case "turn on prints":
+                can_print = True
             case default:
                 continue
     except Exception as e:
