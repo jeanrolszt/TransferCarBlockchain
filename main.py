@@ -63,14 +63,14 @@ def handler_data(client, adress ):
 def recive_block_from(client, adress):
     recived = {
         "ip":adress[0],
-        "chain":[]
+        "blockchain":[]
     }
     while True:
         size = client.recv(BLOCKSIZE).decode("utf-8")
         if size == '':
             break
-        data = client.recv(int(size)).decode("utf-8")
-        recived["chain"].append(json.loads(data))
+        data = client.recv(int(size))
+        recived["chain"].append(pickle.loads(data))
     for past in recived_blockchain:
         if past["ip"] == adress[0]:
             recived_blockchain.remove(past)
@@ -99,9 +99,9 @@ def send_blockchain(node):
     command = f'{len(command):<{COMMANDSIZE}}' + command
     conn.send(command.encode('utf-8'))
     for block in blockchain.chain:
-        msg = block.json()
-        msg = f'{len(msg):<{BLOCKSIZE}}' + msg
-        conn.send((msg).encode("utf-8"))
+        msg = pickle.dumps(block)
+        msg = bytes(f'{len(msg):<{BLOCKSIZE}}', "utf-8") + msg
+        conn.send(msg)
     conn.close()
 
 class Transaction:
