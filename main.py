@@ -19,7 +19,7 @@ DATA_SIZE = 50
 
 nodes = []
 recived_blockchain = {}
-valides_recived_blockchain = []
+liars = {}
 
 run_threads = True
 
@@ -86,6 +86,12 @@ def recived_is_liar(client, adress):
     if socket.gethostbyname(socket.gethostname()) == data:
         print("I'm a liar")
         return
+    else:
+        if data in liars:
+            liars[data] = liars[data] + 1
+        else:
+            liars[data] = 1
+        
 
 def send_is_liar(ip):
     for node in nodes:
@@ -96,11 +102,14 @@ def send_is_liar(ip):
 
 
 def send_blockchain(node):
-    conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    conn.connect((node, DATA_PORT))
-    tcp_protocol_send(conn,"SENDINGBLOCKCHAIN")
-    tcp_protocol_send(conn,blockchain)
-    conn.close()
+    try:
+        conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        conn.connect((node, DATA_PORT))
+        tcp_protocol_send(conn,"SENDINGBLOCKCHAIN")
+        tcp_protocol_send(conn,my_blockchain)
+        conn.close()
+    except:
+        print("falhou")
 
 def transfer_car():
     reciver = "1"
@@ -113,7 +122,7 @@ def transfer_car():
         if not reciver in nodes:
             print("incorrect")
     
-    cars = blockchain.get_cars_from(socket.gethostbyname(socket.gethostname()))
+    cars = my_blockchain.get_cars_from(socket.gethostbyname(socket.gethostname()))
     car = ""
     while not car in cars:
         print("availables cars:")
@@ -124,16 +133,16 @@ def transfer_car():
         if not car in cars:
             print("incorrect")
 
-    blockchain.tranfes_car(reciver,car)
+    my_blockchain.tranfes_car(reciver,car)
 
 def edit_block():
     print("availables blocks:")
-    for (i, item) in enumerate(blockchain.chain, start=0):
+    for (i, item) in enumerate(my_blockchain.chain, start=0):
         print(i, item.json())
     index = int(input("block index ->"))
-    blockchain.chain[index].data.car = input("new car ->")
-    blockchain.chain[index].data.reciver = input("new reciver ->")
-    blockchain.chain[index].data.sender = input("new sender ->")
+    my_blockchain.chain[index].data.car = input("new car ->")
+    my_blockchain.chain[index].data.reciver = input("new reciver ->")
+    my_blockchain.chain[index].data.sender = input("new sender ->")
 
 def print_recived_blockchain():
     for item in recived_blockchain:
@@ -229,6 +238,19 @@ class Blockchain:
             threading.Thread(target=send_blockchain(node)).start()
 
 
+def sync_local_block_chain():
+    global my_blockchain
+    while True:
+        time.sleep(10)
+        valide_blockchain = my_blockchain
+        for ip in recived_blockchain:
+            if recived_blockchain[ip].is_chain_valid():
+                if len(recived_blockchain[ip].chain) > len(valide_blockchain.chain):
+                    valide_blockchain = recived_blockchain[ip]
+        my_blockchain = valide_blockchain
+        my_blockchain.share_blockchain()
+        print("I'm sync :)")
+
 print("Creating node: " + socket.gethostname() + " | IP: " + socket.gethostbyname(socket.gethostname()))
 
 # starting find node threads
@@ -236,8 +258,10 @@ threading.Thread(target=recive_node).start()
 threading.Thread(target=send_node).start()
 
 # starting blockchain
-blockchain = Blockchain()
+my_blockchain = Blockchain()
 threading.Thread(target=recive_data_tcp).start()
+threading.Thread(target=sync_local_block_chain).start()
+
 
 # can't stop execute
 while True:
@@ -251,31 +275,36 @@ while True:
         "share my blockchain",
         "recived_blockchain",
         "see nodes",
-        "is_liar"
+        "list liars"
     ]
     to_print = "\n" + "TranferCarBlockchain" + "\n"
     for (i, item) in enumerate(options, start=1):
         to_print = to_print + str(i) + " - " + str(item) + "\n"
     print(to_print)
-    option = int(input())-1
-    match options[option]:
-        case "buy new car":
-            blockchain.buy_new_car()
-        case "see nodes":
-            print(nodes)
-        case "recived_blockchain":
-            print_recived_blockchain()
-        case "transfer car":
-            transfer_car()
-        case "see my cars":
-            print(blockchain.get_cars_from(socket.gethostbyname(socket.gethostname())))
-        case "see my blockchain":
-            print(blockchain.json())
-        case "share my blockchain":
-            blockchain.share_blockchain()
-        case "edit block":
-            edit_block()
-        case "check local blockchain":
-            print(blockchain.is_chain_valid())
-        case "is_liar":
-            threading.Thread(target=send_is_liar("500.500.500.500")).start()
+    try:
+        option = int(input())-1        
+        match options[option]:
+            case "buy new car":
+                my_blockchain.buy_new_car()
+            case "see nodes":
+                print(nodes)
+            case "recived_blockchain":
+                print_recived_blockchain()
+            case "transfer car":
+                transfer_car()
+            case "see my cars":
+                print(my_blockchain.get_cars_from(socket.gethostbyname(socket.gethostname())))
+            case "see my blockchain":
+                print(my_blockchain.json())
+            case "share my blockchain":
+                my_blockchain.share_blockchain()
+            case "edit block":
+                edit_block()
+            case "check local blockchain":
+                print(my_blockchain.is_chain_valid())
+            case "list liars":
+                print(liars)
+            case default:
+                continue
+    except:
+        print("menu error")
