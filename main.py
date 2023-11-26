@@ -252,8 +252,11 @@ class Blockchain:
 def sync_local_block_chain():
     global my_blockchain
     while True:
-        time.sleep(10)
-        valide_blockchain = my_blockchain
+        time.sleep(20)
+        if(my_blockchain.is_chain_valid()):
+            valide_blockchain = my_blockchain
+        else:
+            valide_blockchain = Blockchain()
         for ip in recived_blockchain:
             if recived_blockchain[ip].is_chain_valid():
                 if len(recived_blockchain[ip].chain) > len(valide_blockchain.chain):
